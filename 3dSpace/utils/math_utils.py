@@ -5,6 +5,7 @@ All vectors and matrixes used are assumed to be Numpy.array.
 """
 
 import numpy as np
+from scipy.interpolate import interp1d
 
 def normalize(v):
     norm = np.linalg.norm(v)
@@ -54,3 +55,26 @@ def eulerAngles2rotMatrix(angles):
                     ])
     R = np.dot(R_z, np.dot(R_y, R_x))
     return R
+
+def resize_vector(vec, new_len: int):
+    assert new_len > 0
+    length = len(vec)
+    output = np.zeros(new_len)
+    f = interp1d(range(length), vec, kind='linear')
+    for i in range(new_len):
+        x = i * (length-1) / (new_len-1)
+        output[i] = f(x)
+    return output
+
+def resize_map(map, new_size: tuple):
+    assert len(new_size) == 2
+    assert new_size[0] > 0 and new_size[1] > 0
+    map = np.array(map)
+    size = map.shape
+    temp = np.zeros((size[0], new_size[1]))
+    for i in range(size[0]):
+        temp[i,:] = resize_vector(map[i,:], new_size[1])
+    output = np.zeros((new_size[0], new_size[1]))
+    for j in range(new_size[0]):
+        output[:,j] = resize_vector(temp[:,j], new_size[0])
+    return output

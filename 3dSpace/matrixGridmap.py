@@ -1,13 +1,14 @@
 #!~/anaconda3/envs/teb/bin/python
 import cupy as cp
 from cupyx.scipy.signal import convolve
+from cupyx.scipy import ndimage
 from utils.math_utils import *
 
 # import matplotlib.pyplot as plt
 # import matplotlib.colors as mpc
 # import matplotlib.image as mpimg
 
-class OccupancyGridMap3D:
+class matrixGridMap3D:
 
     def __init__(self, center_crd=[0,0,0], half_extend=[10.,10.,10.], cell_size=.03, occupancy_threshold=.5):
         """ Creates a grid map
@@ -21,18 +22,19 @@ class OccupancyGridMap3D:
         self.center = cp.array(center_crd)
         self.cell_size = cell_size
         self.occupancy_threshold = occupancy_threshold
-        self.half_dim = cp.floor_divide(cp.array(half_extend), self.cell_size)
-        self.half_size = self.cell_size * self.half_dim
-        self.size = 2 * self.half_size
-        self.dim = 2 * self.half_dim
+        self.half_dim_shape = cp.floor_divide(cp.array(half_extend), self.cell_size)
+        self.half_shape = self.cell_size * self.half_dim_shape
+        self.shape = 2 * self.half_shape
+        self.dim_shape = 2 * self.half_dim_shape
         self._precheck()
-        self.data = cp.zeros((self.dim[0], self.dim[1], self.dim[2]), dtype=bool)
-        self.start_crd = self.center - self.half_size
+        self.data = cp.zeros((self.dim_shape[0], self.dim_shape[1], self.dim_shape[2]), dtype=bool)
+        self.start_crd = self.center - self.half_shape
         self.obj_info = {}
+        self.dilation = 0.
     
     def _precheck(self):
         for i in range(3):
-            if self.size[i] <= 0 or self.dim[i] <= 0:
+            if self.shape[i] <= 0 or self.dim_shape[i] <= 0:
                 print("Invalid initialization parameters!")
                 exit(-1)
     
@@ -40,10 +42,10 @@ class OccupancyGridMap3D:
         return cp.asnumpy(self.center)
     
     def get_size(self):
-        return cp.asnumpy(self.size)
+        return cp.asnumpy(self.shape)
     
     def get_dim(self):
-        return cp.asnumpy(self.dim)
+        return cp.asnumpy(self.dim_shape)
 
     def _wcrd_to_lcrd(self, wcrd):
         """Convert a world coordinate to local coordinate
@@ -74,7 +76,7 @@ class OccupancyGridMap3D:
         inside (bool)
         """
         for i in range(3):
-            if lcrd[i] < 0 or lcrd[i] > self.size[i]:
+            if lcrd[i] < 0 or lcrd[i] > self.shape[i]:
                 return True
         return False
     
@@ -152,6 +154,7 @@ class OccupancyGridMap3D:
             {type: "ball", center(1x3 array), radius}
             {type: "height_field", start_pos_bias(1x3 array), height_field(object)}
         """
+        self.data = cp.zeros((self.dim_shape[0], self.dim_shape[1], self.dim_shape[2]), dtype=bool)
         for (_, param) in self.obj_info.items():
             if param['type'] == "box":
                 rotmat = cp.array(eulerAngles2rotMatrix([0., 0., param['yaw_rad']]))
@@ -204,37 +207,16 @@ class OccupancyGridMap3D:
                                 self.data[idx] = 1
 
             elif param['type'] == "height_field":
-                start_pos_bias = cp.array(param['start_pos_bias'])
                 height_field = param['height_field']
-                start_pos = cp.array(height_field.get_start_pos()) + start_pos_bias
-                data = np.array(param['height_data'])
-                if only_height_field is None:
-                    terrainShape = p.createCollisionShape(shapeType=p.GEOM_HEIGHTFIELD,
-                                                        meshScale=param['scale'],
-                                                        heightfieldTextureScaling=(data.shape[0]-1)/2,
-                                                        heightfieldData=param['height_data'].flatten(order='F'),
-                                                        numHeightfieldRows=data.shape[0],
-                                                        numHeightfieldColumns=data.shape[1],
-                                                        physicsClientId=pclient)
-                    only_height_field = terrainShape
-                else:
-                    terrainShape = p.createCollisionShape(shapeType=p.GEOM_HEIGHTFIELD,
-                                                        meshScale=param['scale'],
-                                                        heightfieldTextureScaling=(data.shape[0]-1)/2,
-                                                        heightfieldData=param['height_data'],
-                                                        numHeightfieldRows=data.shape[0],
-                                                        numHeightfieldColumns=data.shape[1],
-                                                        replaceHeightfieldIndex=only_height_field,
-                                                        physicsClientId=pclient)
-                    continue
-                uid = p.createMultiBody(baseMass=0,
-                                    baseCollisionShapeIndex=terrainShape,
-                                    physicsClientId=pclient)
-                pos_bias = [data.shape[0]*param['scale'][0] / 2,
-                            data.shape[1]*param['scale'][1] / 2,
-                            0]
-                p.resetBasePositionAndOrientation(uid, pos_bias, [0,0,0,1], physicsClientId=pclient)
-                p.changeVisualShape(uid, -1, rgbaColor=[1,1,1,1], physicsClientId=pclient)
+                for i in range(self.dim_shape[0]):
+                    for j in range(self.dim_shape[1]):
+                        wcrd = self._idx_to_wcrd((i,j,0))
+                        if not height_field.is_pos_out_range([wcrd[0], wcrd[1]]):
+                            h = height_field.get_height([wcrd[0], wcrd[1]])
+                            h_dim = int(round(h/self.cell_size))
+                            for k in range(min(h_dim, self.dim_shape[2])):
+                                self.data[i,j,k] = 1
+                
             else:
                 print("Warning: undefined obstacle type! Add nothing!")
 
@@ -258,96 +240,17 @@ class OccupancyGridMap3D:
             print("Unsupported obstacle refresh mode!")
         self._refresh_obstacles()
 
-
-
-    
     def obstacle_dilation(self, dist=0.):
-        half_len = max(1, int(round(dist/self.cell_size)))
-
-        conv_core = np.ones((2*half_len+1, 2*half_len+1, 2*half_len+1))
-        new_data = signal.convolve(self.data, conv_core, mode='same')
-        self.data = new_data
-        self.map_normalize()
+        half_len = int(round(dist/self.cell_size))
+        if half_len == 0:
+            return
+        core = ndimage.generate_binary_structure(3, 1)
+        if half_len >= 2:
+            core = ndimage.iterate_structure(core, half_len)
+        self.data = ndimage.binary_dilation(self.data, structure=core)
+        self.dilation = dist
         
-    def plot(self, axis=None, grid=False):
-        """
-        plot the grid map
-        """
-        if axis == None:
-            figure = plt.figure('grid_map')
-            axis = figure.add_axes([0.05,0.05,0.95,0.95], projection='3d')
-        ax = axis
-        if grid:
-            color = mpc.to_rgba('lightseagreen', alpha=0.4)
-            vs = self.data
-            x,y,z = np.indices(np.array(vs.shape)+1)
-            ax.voxels(x*self.cell_size, y*self.cell_size, z*self.cell_size, vs, facecolors=color)
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_zlabel('z')
-            ax.set_title('3D Voxel Map')
-        else:
-            print("Warning: This function is only suitable for drawing the obstacles that are not hollowed out!")
-            # true_data = np.clip(np.around(self.data), 0., 1.)
-            Z = self.data.sum(axis=2) * self.cell_size
-            X, Y = np.meshgrid(np.linspace(0,self.dim_meters[0], num=self.dim_cells[0]),
-                                np.linspace(0,self.dim_meters[1], num=self.dim_cells[1]))
-            ax.contour(X, Y, Z.T, 3, extend3d=True, colors='darkgrey', alpha=0.5)
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_zlabel('z')
-            ax.set_title('3D Contour')
 
-        plt.show(block=False)
-        plt.pause(5)
-        plt.close()
-
-class GridMapPath(OccupancyGridMap3D):
-
-    def __init__(self, array3D, crd_bias=[0,0,0], cell_size=.1, occupancy_threshold=.5):
-        super().__init__(array3D, crd_bias, cell_size, occupancy_threshold)
-        self.visited = np.zeros(self.dim_cells, dtype=np.float32)
-    
-    def get_data_idx(self, point_idx):
-        x_index, y_index, z_index = point_idx
-        if x_index < 0 or y_index < 0 or z_index < 0 \
-            or x_index >= self.dim_cells[0] or y_index >= self.dim_cells[1] or z_index >= self.dim_cells[2]:
-            raise Exception('Point is outside map boundary')
-        return self.data[x_index][y_index][z_index]
-
-    def mark_visited_idx(self, point_idx):
-        x_index, y_index, z_index = point_idx
-        if x_index < 0 or y_index < 0 or z_index < 0 \
-            or x_index >= self.dim_cells[0] or y_index >= self.dim_cells[1] or z_index >= self.dim_cells[2]:
-            raise Exception('Point is outside map boundary')
-        self.visited[x_index][y_index][z_index] = 1.0
-
-    def is_visited_idx(self, point_idx):
-        x_index, y_index, z_index = point_idx
-        if x_index < 0 or y_index < 0 or z_index < 0 \
-            or x_index >= self.dim_cells[0] or y_index >= self.dim_cells[1] or z_index >= self.dim_cells[2]:
-            raise Exception('Point is outside map boundary')
-        if self.visited[x_index][y_index][z_index] == 1.0:
-            return True
-        else:
-            return False
-
-def GridMapFromImage(imgpath: str, height: float, cell_size: float=0.1, with_path: bool=True):
-    img_array = mpimg.imread(imgpath)
-    gray_img = np.dot(img_array[...,:3], [0.299, 0.587, 0.114])
-    for i in range(gray_img.shape[0]):
-        for j in range(gray_img.shape[1]):
-            if gray_img[i][j] >= 0.5:
-                gray_img[i][j] = 1
-            else:
-                gray_img[i][j] = 0
-    height_num = int(round(height / cell_size))
-    _data = np.broadcast_to(gray_img.reshape((gray_img.shape[0], gray_img.shape[1], 1)),
-                                (gray_img.shape[0], gray_img.shape[1], height_num))
-    if not with_path:
-        return OccupancyGridMap3D(_data.copy(), cell_size=cell_size)
-    else:
-        return GridMapPath(_data.copy(), cell_size=cell_size)
 
 def BlankGridMap(length: float, width: float, height: float, cell_size: float=0.05, with_path: bool=True):
     len_dim = int(round(length / cell_size))

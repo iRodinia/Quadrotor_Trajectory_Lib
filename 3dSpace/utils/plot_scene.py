@@ -1,6 +1,40 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from FrenetTraj import FrenetTraj
+from matrixGridmap import *
+
+def plot_girdMap(girdMap: OccupancyGridMap3D):
+    """
+    plot the grid map
+    """
+    if axis == None:
+        figure = plt.figure('grid_map')
+        axis = figure.add_axes([0.05,0.05,0.95,0.95], projection='3d')
+    ax = axis
+    if grid:
+        color = mpc.to_rgba('lightseagreen', alpha=0.4)
+        vs = self.data
+        x,y,z = np.indices(np.array(vs.shape)+1)
+        ax.voxels(x*self.cell_size, y*self.cell_size, z*self.cell_size, vs, facecolors=color)
+        ax.set_xlabel('x')
+        
+        ax.set_ylabel('y')
+        ax.set_zlabel('z')
+        ax.set_title('3D Voxel Map')
+    else:
+        print("Warning: This function is only suitable for drawing the obstacles that are not hollowed out!")
+        # true_data = np.clip(np.around(self.data), 0., 1.)
+        Z = self.data.sum(axis=2) * self.cell_size
+        X, Y = np.meshgrid(np.linspace(0,self.dim_meters[0], num=self.dim_cells[0]),
+                            np.linspace(0,self.dim_meters[1], num=self.dim_cells[1]))
+        ax.contour(X, Y, Z.T, 3, extend3d=True, colors='darkgrey', alpha=0.5)
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_zlabel('z')
+        ax.set_title('3D Contour')
+
+    plt.show(block=False)
+    plt.pause(5)
+    plt.close()
 
 def plot_shape(trajectory, dt=0.01):
     """draw 4 subplots:
