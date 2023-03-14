@@ -25,6 +25,9 @@ class heightField:
     def get_start_pos(self):
         return cp.asnumpy(self.start_pos)
     
+    def get_aera_shape(self):
+        return self.meter_shape
+    
     def _is_lcrd_out_range(self, lcrd):
         if lcrd[0] < 0 or lcrd[0] > self.meter_shape[0] or lcrd[1] < 0 or lcrd[1] > self.meter_shape[1]:
             return True

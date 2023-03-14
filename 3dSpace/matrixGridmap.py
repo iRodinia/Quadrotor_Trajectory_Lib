@@ -1,16 +1,11 @@
 #!~/anaconda3/envs/teb/bin/python
 import cupy as cp
-from cupyx.scipy.signal import convolve
 from cupyx.scipy import ndimage
 from utils.math_utils import *
 
-# import matplotlib.pyplot as plt
-# import matplotlib.colors as mpc
-# import matplotlib.image as mpimg
-
 class matrixGridMap3D:
 
-    def __init__(self, center_crd=[0,0,0], half_extend=[10.,10.,10.], cell_size=.03, occupancy_threshold=.5):
+    def __init__(self, center_crd=[0,0,0], half_extend=[5.,5.,3.], cell_size=.03, occupancy_threshold=.5):
         """ Creates a grid map
 
         :param center_crd: world coordinate of the center of the grid map
@@ -25,7 +20,7 @@ class matrixGridMap3D:
         self.half_dim_shape = cp.floor_divide(cp.array(half_extend), self.cell_size)
         self.half_shape = self.cell_size * self.half_dim_shape
         self.shape = 2 * self.half_shape
-        self.dim_shape = 2 * self.half_dim_shape
+        self.dim_shape = 2 * self.half_dim_shape.get().astype(int)
         self._precheck()
         self.data = cp.zeros((self.dim_shape[0], self.dim_shape[1], self.dim_shape[2]), dtype=bool)
         self.start_crd = self.center - self.half_shape
@@ -46,6 +41,9 @@ class matrixGridMap3D:
     
     def get_dim(self):
         return cp.asnumpy(self.dim_shape)
+    
+    def get_data(self):
+        return cp.asnumpy(self.data)
 
     def _wcrd_to_lcrd(self, wcrd):
         """Convert a world coordinate to local coordinate
@@ -152,7 +150,7 @@ class matrixGridMap3D:
             {type: "box", center(1x3 array), half_extend(1x3 array), yaw_rad}
             {type: "cylinder", center(1x3 array), radius, height}
             {type: "ball", center(1x3 array), radius}
-            {type: "height_field", start_pos_bias(1x3 array), height_field(object)}
+            {type: "height_field", height_field(object)}
         """
         self.data = cp.zeros((self.dim_shape[0], self.dim_shape[1], self.dim_shape[2]), dtype=bool)
         for (_, param) in self.obj_info.items():
@@ -212,13 +210,15 @@ class matrixGridMap3D:
                     for j in range(self.dim_shape[1]):
                         wcrd = self._idx_to_wcrd((i,j,0))
                         if not height_field.is_pos_out_range([wcrd[0], wcrd[1]]):
-                            h = height_field.get_height([wcrd[0], wcrd[1]])
+                            h = height_field.get_height([wcrd[0], wcrd[1]]).get()
                             h_dim = int(round(h/self.cell_size))
                             for k in range(min(h_dim, self.dim_shape[2])):
                                 self.data[i,j,k] = 1
                 
             else:
                 print("Warning: undefined obstacle type! Add nothing!")
+        
+        self.obstacle_dilation(dist=self.dilation)
 
     def add_obstacles(self, obs_dict: dict, mode=0):
         """Add obstacles to the map
@@ -247,31 +247,30 @@ class matrixGridMap3D:
         core = ndimage.generate_binary_structure(3, 1)
         if half_len >= 2:
             core = ndimage.iterate_structure(core, half_len)
-        self.data = ndimage.binary_dilation(self.data, structure=core)
+        self.data = ndimage.binary_dilation(self.data, structure=cp.array(core))
         self.dilation = dist
         
 
-
-def BlankGridMap(length: float, width: float, height: float, cell_size: float=0.05, with_path: bool=True):
-    len_dim = int(round(length / cell_size))
-    wid_dim = int(round(width / cell_size))
-    hgt_dim = int(round(height / cell_size))
-    _data = np.zeros((len_dim,wid_dim,hgt_dim), dtype=int)
-    if not with_path:
-        return OccupancyGridMap3D(_data.copy(), cell_size=cell_size)
-    else:
-        return GridMapPath(_data.copy(), cell_size=cell_size)
-
 if __name__ == '__main__':
     import os
-    # import numpy as np
+    import time
+    from heightField import constructHeightFieldFromImg
 
-    # path = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) + '/pictures/test.png'
-    # grid = GridMapFromImage(path, 3.)
-    # grid.obstacle_dilation(0.2)
-    # grid.plot(grid=False)
+    path = os.path.abspath(os.path.dirname(__file__)) + '/pictures/test.png'
+    field = constructHeightFieldFromImg(path, 3.0, [0,0], cell_size=0.03, data_shape=(60,70))
+    obs_dict = {'obs1': {'type': 'height_field', 'height_field':field}}
 
-    a = cp.array([[0,1,1,0], [0,0,0,1]], dtype=bool)
-    b = (0,1)
-    # print(convolve(a, b, mode='same'))
-    print(a[b])
+    core = ndimage.generate_binary_structure(3, 1)
+    core = ndimage.iterate_structure(core, 3)
+
+
+
+    # start_time = time.time()
+    # map = matrixGridMap3D(center_crd=[0,0,0], half_extend=[3,3,2], cell_size=0.05)
+    # cons_time = time.time()
+    # print('construction time: ', cons_time - start_time)
+    # map.add_obstacles(obs_dict=obs_dict)
+    # load_time = time.time()
+    # print('load time: ', load_time - cons_time)
+    # map.obstacle_dilation(dist=0.5)
+    # print('dialation time: ', time.time() - load_time)
