@@ -102,6 +102,6 @@ def constructHeightFieldFromImg(imgpath: str, max_height, start_pos, cell_size=0
 if __name__ == '__main__':
     import os
     import numpy as np
-    path = os.path.abspath(os.path.dirname(__file__)) + '/pictures/test.png'
+    path = os.path.dirname(__file__) + '/pictures/test.png'
     field = constructHeightFieldFromImg(path, 3.0, [0,0], cell_size=0.03, data_shape=(60,70))
     print(field.generate_height_matrix([0.0, 0.0], [0.7, 0.5], cell_size=0.07).shape)

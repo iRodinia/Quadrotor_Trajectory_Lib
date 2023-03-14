@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import matplotlib.pyplot as plt
 from vispy import app, visuals, scene
@@ -7,11 +11,14 @@ def plot_girdMap(gridMap: matrixGridMap3D):
     """
     plot the grid map
     """
-    vol = gridMap.get_data()
+    vol = gridMap.get_data().astype(np.int16) * 100
+    vol = vol.transpose((2,1,0))
 
     canvas = scene.SceneCanvas(keys='interactive', title='Grid Map 3D', show=True)
     view = canvas.central_widget.add_view()
-    volume = scene.visuals.Volume(vol, parent=view.scene, threshold=0.5, method='mip', texture_format='auto')
+    volume = scene.visuals.Volume(vol, clim=(0,200), parent=view.scene, method='mip')
+    cam = scene.cameras.TurntableCamera(parent=view.scene, name='Turntable')
+    view.camera = cam
 
     canvas.app.run()
 
@@ -62,7 +69,7 @@ def plot_shape(trajectory, dt=0.01):
     )
 
 
-def plot_curv_and_tors(trajectory: FrenetTraj, dt=0.01):
+def plot_curv_and_tors(trajectory, dt=0.01):
     """draw 2 subplots:
         1. curvature
         2. torsion
@@ -90,3 +97,22 @@ def plot_curv_and_tors(trajectory: FrenetTraj, dt=0.01):
         wspace=0.224,
         hspace=0.2
     )
+
+if __name__ == "__main__":
+    import os
+    import time
+    from heightField import constructHeightFieldFromImg
+
+    path = os.path.abspath(os.path.dirname(os.path.dirname(__file__))) + '/pictures/test.png'
+    field = constructHeightFieldFromImg(path, 3.0, [0,0], cell_size=0.03, data_shape=(60,70))
+    obs_dict = {'obs1': {'type': 'height_field', 'height_field':field}}
+
+    start_time = time.time()
+    map = matrixGridMap3D(center_crd=[0,0,0], half_extend=[3,3,2], cell_size=0.05)
+    cons_time = time.time()
+    print('construction time: ', cons_time - start_time)
+    map.add_obstacles(obs_dict=obs_dict)
+    load_time = time.time()
+    print('load time: ', load_time - cons_time)
+
+    plot_girdMap(map)
