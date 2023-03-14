@@ -260,17 +260,12 @@ if __name__ == '__main__':
     field = constructHeightFieldFromImg(path, 3.0, [0,0], cell_size=0.03, data_shape=(60,70))
     obs_dict = {'obs1': {'type': 'height_field', 'height_field':field}}
 
-    core = ndimage.generate_binary_structure(3, 1)
-    core = ndimage.iterate_structure(core, 3)
-
-
-
-    # start_time = time.time()
-    # map = matrixGridMap3D(center_crd=[0,0,0], half_extend=[3,3,2], cell_size=0.05)
-    # cons_time = time.time()
-    # print('construction time: ', cons_time - start_time)
-    # map.add_obstacles(obs_dict=obs_dict)
-    # load_time = time.time()
-    # print('load time: ', load_time - cons_time)
-    # map.obstacle_dilation(dist=0.5)
-    # print('dialation time: ', time.time() - load_time)
+    start_time = time.time()
+    map = matrixGridMap3D(center_crd=[0,0,0], half_extend=[3,3,2], cell_size=0.05)
+    cons_time = time.time()
+    print('construction time: ', cons_time - start_time)
+    map.add_obstacles(obs_dict=obs_dict)
+    load_time = time.time()
+    print('load time: ', load_time - cons_time)
+    map.obstacle_dilation(dist=0.5)
+    print('dialation time: ', time.time() - load_time)
