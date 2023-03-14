@@ -44,6 +44,9 @@ class matrixGridMap3D:
     
     def get_data(self):
         return cp.asnumpy(self.data)
+    
+    def get_obs_dict(self):
+        return self.obj_info
 
     def _wcrd_to_lcrd(self, wcrd):
         """Convert a world coordinate to local coordinate
