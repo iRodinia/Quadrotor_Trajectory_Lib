@@ -1,5 +1,5 @@
-import sys 
-sys.path.append("..") 
+import sys
+sys.path.append('D:\ProgramData\PythonLibs\TrajectoryLibForZKZ') 
 
 import numpy as np
 from scipy import optimize
@@ -57,7 +57,7 @@ class MinimumSnapOptimizer:
         A_cons[:self.start_constraint_num, :n_coef] = full_polyder(0., max_k=self.start_constraint_num-1, order=self.order)
         B_cons[0] = self.pathpoints[0]
         B_cons[1:self.start_constraint_num, :] = self.start_derivatives
-        A_cons[self.start_constraint_num:self.start_constraint_num+self.end_constraint_num, :] = \
+        A_cons[self.start_constraint_num:self.start_constraint_num+self.end_constraint_num, -n_coef:] = \
             full_polyder(T[-1], max_k=self.end_constraint_num-1, order=self.order)
         B_cons[self.start_constraint_num] = self.pathpoints[-1]
         B_cons[self.start_constraint_num+1:self.start_constraint_num+self.end_constraint_num, :] = self.end_derivatives
@@ -96,24 +96,24 @@ class MinimumSnapOptimizer:
         # weight determines the cost weight for different axis
         assert weight.shape[0] == self.dim
         weight_mat = np.diag(weight) # can be modified to specify different weight for different axis
-        Q = Hessian(T)
+        Q = Hessian(T, order=self.order)
 
         A_cons, B_cons, A_free = self._get_constraints(T)
         free_var_num = A_free.shape[0]
         if free_var_num != 0:
-            A = np.vstack(A_cons, A_free)
+            A = np.vstack((A_cons, A_free))
             invA = np.linalg.inv(A)
             R = invA.T@Q@invA
             Rfp = R[:-free_var_num, -free_var_num:]
             Rpp = R[-free_var_num:, -free_var_num:]
             dp = - np.linalg.inv(Rpp) @ Rfp.T @ B_cons
-            B = np.vstack(B_cons, dp)
+            B = np.vstack((B_cons, dp))
             P = invA @ B
         else:
             invA = np.linalg.inv(A_cons)
             P = invA @ B_cons
 
-        cost = np.trace(P.T@Q@weight_mat@P)
+        cost = np.trace(P.T@Q@P@weight_mat)
         return P, cost
 
     def _get_cost_with_time(self, T):
