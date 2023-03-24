@@ -140,7 +140,7 @@ class MinimumSnapOptimizer:
             mat[seg,1:self.order+2] = coef_mat[0,seg*(self.order+1):(seg+1)*(self.order+1)]
             mat[seg,self.order+2:2*self.order+3] = coef_mat[1,seg*(self.order+1):(seg+1)*(self.order+1)]
             mat[seg,2*self.order+3:3*self.order+4] = coef_mat[2,seg*(self.order+1):(seg+1)*(self.order+1)]
-        return PolyTrajectory(mat, self.order)
+        return PolyTrajectory(mat, self.order+1)
 
 
 if __name__ == '__main__':
@@ -151,5 +151,5 @@ if __name__ == '__main__':
                    [9,9,9]]
     opt = MinimumSnapOptimizer(np.array(test_points), avg_vel=2., poly_order=6, continuity_order=3)
     T, P, cost = opt.minimum_snap_with_time_allocation()
-
-    print(T)
+    poly = opt.convert_to_polynomial(T, P)
+    print(poly.eval(5.))
