@@ -92,8 +92,10 @@ class MinimumSnapOptimizer:
         return A_cons, B_cons, A_free
     
 
-    def minimum_snap(self, T, weight=np.array([1., 1., 1.])):
+    def minimum_snap(self, T, weight=None):
         # weight determines the cost weight for different axis
+        if weight == None:
+            weight = np.ones(self.dim)
         assert weight.shape[0] == self.dim
         weight_mat = np.diag(weight) # can be modified to specify different weight for different axis
         Q = Hessian(T, order=self.order)
@@ -103,7 +105,7 @@ class MinimumSnapOptimizer:
         if free_var_num != 0:
             A = np.vstack((A_cons, A_free))
             invA = np.linalg.inv(A)
-            R = invA.T@Q@invA
+            R = invA.T @ Q @ invA
             Rfp = R[:-free_var_num, -free_var_num:]
             Rpp = R[-free_var_num:, -free_var_num:]
             dp = - np.linalg.inv(Rpp) @ Rfp.T @ B_cons
@@ -113,7 +115,7 @@ class MinimumSnapOptimizer:
             invA = np.linalg.inv(A_cons)
             P = invA @ B_cons
 
-        cost = np.trace(P.T@Q@P@weight_mat)
+        cost = np.trace(P.T @ Q @ P @ weight_mat)
         return P, cost
 
     def _get_cost_with_time(self, T):
@@ -149,7 +151,7 @@ if __name__ == '__main__':
                    [5,6,7],
                    [3,4,9],
                    [9,9,9]]
-    opt = MinimumSnapOptimizer(np.array(test_points), avg_vel=2., poly_order=6, continuity_order=3)
+    opt = MinimumSnapOptimizer(np.array(test_points), avg_vel=2., poly_order=7, continuity_order=4)
     T, P, cost = opt.minimum_snap_with_time_allocation()
     poly = opt.convert_to_polynomial(T, P)
     print(poly.eval(5.))
