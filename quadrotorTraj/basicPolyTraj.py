@@ -1,5 +1,3 @@
-#!~/anaconda3/envs/teb/bin/python
-
 import numpy as np
 from .utils.math_utils import *
 

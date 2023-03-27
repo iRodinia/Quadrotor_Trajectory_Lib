@@ -1,10 +1,11 @@
+import os
 import sys
-sys.path.append('D:\ProgramData\PythonLibs\TrajectoryLibForZKZ') 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 
 import numpy as np
 from scipy import optimize
 from quadrotorTraj.basicPolyTraj import PolyTrajectory
-from general_utils.geometry_utils import *
+from .general_utils.geometry_utils import *
 
 class MinimumSnapOptimizer:
 
@@ -74,7 +75,7 @@ class MinimumSnapOptimizer:
             A_cons[idx2+i*(self.continuity_order+1):idx2+(i+1)*(self.continuity_order+1), n_coef*i:n_coef*(i+1)] =\
                 full_polyder(T[i], max_k=self.continuity_order, order=self.order)
             A_cons[idx2+i*(self.continuity_order+1):idx2+(i+1)*(self.continuity_order+1), n_coef*(i+1):n_coef*(i+2)] =\
-                full_polyder(0., max_k=self.continuity_order, order=self.order)
+                - full_polyder(0., max_k=self.continuity_order, order=self.order)
         
         # t=T free variables
         for i in range(n_seg-1):
